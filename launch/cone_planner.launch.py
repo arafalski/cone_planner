@@ -35,6 +35,7 @@ def launch_setup(context, *args, **kwargs):
         remappings=[
             ("~/input/occupancy_grid", "/map"),
             ("~/input/trajectory", "/planning/racing_planner/trajectory"),
+            ("~/output/trajectory", "/planning/racing_planner/avoidance/trajectory"),
         ],
         parameters=[param_path],
         output="screen",

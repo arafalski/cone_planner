@@ -23,10 +23,4 @@ ConePlanner::ConePlanner()
 {
 }
 
-int64_t ConePlanner::foo(int64_t bar) const
-{
-  std::cout << "Hello World, " << bar << std::endl;
-  return bar;
-}
-
 }  // namespace cone_planner

@@ -27,7 +27,6 @@ class CONE_PLANNER_PUBLIC ConePlanner
 {
 public:
   ConePlanner();
-  int64_t foo(int64_t bar) const;
 };
 
 }  // namespace cone_planner
