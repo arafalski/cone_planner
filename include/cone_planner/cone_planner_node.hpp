@@ -36,11 +36,21 @@ public:
   explicit ConePlannerNode(const rclcpp::NodeOptions & options);
 
 private:
-  void onOccupancyGrid(const OccupancyGrid::ConstSharedPtr msg);
+  rclcpp::Publisher<Trajectory>::SharedPtr planned_trajectory_pub_;
 
+  rclcpp::Subscription<Trajectory>::SharedPtr trajectory_sub_;
   rclcpp::Subscription<OccupancyGrid>::SharedPtr occupancy_grid_sub_;
 
-  OccupancyGrid::ConstSharedPtr occupancy_grid_;
+  rclcpp::TimerBase::SharedPtr timer_;
+
+  void onTimer();
+  void reset();
+  void planTrajectory();
+
+  Trajectory::SharedPtr trajectory_;
+  OccupancyGrid::SharedPtr occupancy_grid_;
+  Trajectory planned_trajectory_;
+  bool is_completed_ = false;
 
   ConePlannerPtr cone_planner_{nullptr};
 };

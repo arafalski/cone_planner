@@ -20,20 +20,53 @@ namespace cone_planner
 ConePlannerNode::ConePlannerNode(const rclcpp::NodeOptions & options)
 :  Node("cone_planner", options)
 {
+  planned_trajectory_pub_ = create_publisher<Trajectory>("~/output/trajectory", rclcpp::QoS{1});
+
+  trajectory_sub_ = create_subscription<Trajectory>(
+    "~/input/trajectory",
+    rclcpp::QoS{1},
+    [this](const Trajectory::SharedPtr msg) { trajectory_ = msg; }
+  );
+
   occupancy_grid_sub_ = create_subscription<OccupancyGrid>(
     "~/input/occupancy_grid",
     rclcpp::QoS{1},
-    std::bind(&ConePlannerNode::onOccupancyGrid, this, std::placeholders::_1)
+    [this](const OccupancyGrid::SharedPtr msg) { occupancy_grid_ = msg; }
   );
 
   cone_planner_ = std::make_unique<cone_planner::ConePlanner>();
-  RCLCPP_INFO_ONCE(this->get_logger(), "Initialized node\n");
+
+  using namespace std::literals::chrono_literals;
+  timer_ = rclcpp::create_timer(
+    this, get_clock(), 100ms, std::bind(&ConePlannerNode::onTimer, this));
+
+  RCLCPP_INFO_ONCE(get_logger(), "Initialized node\n");
 }
 
-void ConePlannerNode::onOccupancyGrid(const OccupancyGrid::ConstSharedPtr msg)
+void ConePlannerNode::onTimer()
 {
-  occupancy_grid_ = msg;
-  RCLCPP_INFO_ONCE(this->get_logger(), "Received occupancy grid\n");
+  if (!trajectory_ || !occupancy_grid_) {
+    RCLCPP_INFO_ONCE(get_logger(), "Data not ready\n");
+    return;
+  }
+
+  reset();
+  planTrajectory();
+
+  planned_trajectory_pub_->publish(planned_trajectory_);
+}
+
+void ConePlannerNode::reset()
+{
+  planned_trajectory_ = Trajectory();
+  is_completed_ = false;
+}
+
+void ConePlannerNode::planTrajectory()
+{
+  if (!occupancy_grid_) {
+    return;
+  }
 }
 
 }  // namespace cone_planner

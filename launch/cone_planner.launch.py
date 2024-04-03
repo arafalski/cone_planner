@@ -34,6 +34,7 @@ def launch_setup(context, *args, **kwargs):
         name="cone_planner_node",
         remappings=[
             ("~/input/occupancy_grid", "/map"),
+            ("~/input/trajectory", "/planning/racing_planner/trajectory"),
         ],
         parameters=[param_path],
         output="screen",
