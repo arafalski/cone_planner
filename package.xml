@@ -16,6 +16,7 @@
   <depend>autoware_auto_vehicle_msgs</depend>
   <depend>motion_utils</depend>
   <depend>vehicle_info_util</depend>
+  <depend>freespace_planning_algorithms</depend>
 
   <test_depend>ament_cmake_ros</test_depend>
   <test_depend>ament_lint_auto</test_depend>

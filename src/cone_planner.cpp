@@ -18,6 +18,8 @@
 #include <tier4_autoware_utils/math/normalization.hpp>
 #include <tf2/utils.h>
 
+#include "freespace_planning_algorithms/rrtstar_core.hpp"
+
 #include <vector>
 
 namespace cone_planner
