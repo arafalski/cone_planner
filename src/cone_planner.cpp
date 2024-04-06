@@ -14,13 +14,7 @@
 
 #include "cone_planner/cone_planner.hpp"
 
-#include <iostream>
-
 namespace cone_planner
 {
-
-ConePlanner::ConePlanner()
-{
-}
 
 }  // namespace cone_planner

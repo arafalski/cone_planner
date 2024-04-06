@@ -15,10 +15,7 @@
 #ifndef CONE_PLANNER__CONE_PLANNER_HPP_
 #define CONE_PLANNER__CONE_PLANNER_HPP_
 
-#include <cstdint>
-
 #include "cone_planner/visibility_control.hpp"
-
 
 namespace cone_planner
 {
@@ -26,7 +23,7 @@ namespace cone_planner
 class CONE_PLANNER_PUBLIC ConePlanner
 {
 public:
-  ConePlanner();
+  ConePlanner() = default;
 };
 
 }  // namespace cone_planner

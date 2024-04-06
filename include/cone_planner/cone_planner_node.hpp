@@ -19,8 +19,9 @@
 #include <rclcpp/rclcpp.hpp>
 
 #include <nav_msgs/msg/occupancy_grid.hpp>
-
-#include "autoware_auto_planning_msgs/msg/trajectory.hpp"
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <autoware_auto_planning_msgs/msg/trajectory.hpp>
+#include <autoware_auto_planning_msgs/msg/trajectory_point.hpp>
 
 #include "cone_planner/cone_planner.hpp"
 
@@ -28,7 +29,9 @@ namespace cone_planner
 {
 using ConePlannerPtr = std::unique_ptr<cone_planner::ConePlanner>;
 using autoware_auto_planning_msgs::msg::Trajectory;
+using autoware_auto_planning_msgs::msg::TrajectoryPoint;
 using nav_msgs::msg::OccupancyGrid;
+using geometry_msgs::msg::PoseStamped;
 
 class CONE_PLANNER_PUBLIC ConePlannerNode : public rclcpp::Node
 {
@@ -40,15 +43,18 @@ private:
 
   rclcpp::Subscription<Trajectory>::SharedPtr trajectory_sub_;
   rclcpp::Subscription<OccupancyGrid>::SharedPtr occupancy_grid_sub_;
+  rclcpp::Subscription<PoseStamped>::SharedPtr pose_sub_;
 
   rclcpp::TimerBase::SharedPtr timer_;
 
   void onTimer();
   void reset();
   void planTrajectory();
+  TrajectoryPoint get_closest_point();
 
   Trajectory::SharedPtr trajectory_;
   OccupancyGrid::SharedPtr occupancy_grid_;
+  PoseStamped::SharedPtr pose_;
   Trajectory planned_trajectory_;
   bool is_completed_ = false;
 
