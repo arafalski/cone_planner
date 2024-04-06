@@ -14,8 +14,27 @@
 
 #include "cone_planner/cone_planner_node.hpp"
 
+#include <geometry_msgs/msg/pose.hpp>
 #include <motion_utils/trajectory/trajectory.hpp>
 #include <vehicle_info_util/vehicle_info_util.hpp>
+
+namespace
+{
+using geometry_msgs::msg::Pose;
+using geometry_msgs::msg::PoseStamped;
+using geometry_msgs::msg::TransformStamped;
+
+Pose transform_pose(const Pose& pose, const TransformStamped& transform)
+{
+  PoseStamped transformed_pose;
+  PoseStamped orig_pose;
+  orig_pose.pose = pose;
+  tf2::doTransform(orig_pose, transformed_pose, transform);
+
+  return transformed_pose.pose;
+}
+
+} // namespace
 
 namespace cone_planner
 {
@@ -47,6 +66,9 @@ ConePlannerNode::ConePlannerNode(const rclcpp::NodeOptions & options)
     const auto conePlannerParam = get_planner_param();
     cone_planner_ = std::make_unique<ConePlanner>(conePlannerParam, vehicle_shape_);
   }
+
+  tf_buffer_ = std::make_shared<tf2_ros::Buffer>(get_clock());
+  tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
   using namespace std::literals::chrono_literals;
   timer_ =
@@ -105,11 +127,30 @@ void ConePlannerNode::reset()
 
 void ConePlannerNode::planTrajectory()
 {
-  if (!occupancy_grid_) {
+  if (!occupancy_grid_ || !pose_) {
     return;
   }
 
   cone_planner_->set_map(*occupancy_grid_);
+
+  const auto current_pose_in_costmap_frame = transform_pose(
+    pose_->pose,
+    get_transform(occupancy_grid_->header.frame_id,
+                  pose_->header.frame_id));
+}
+
+TransformStamped ConePlannerNode::get_transform(
+  const std::string& from,
+  const std::string& to)
+{
+  TransformStamped tf;
+  try {
+    tf =
+      tf_buffer_->lookupTransform(from, to, rclcpp::Time(0), rclcpp::Duration::from_seconds(1.0));
+  } catch (const tf2::TransformException & ex) {
+    RCLCPP_ERROR(get_logger(), "%s", ex.what());
+  }
+  return tf;
 }
 
 }  // namespace cone_planner
