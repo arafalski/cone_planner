@@ -28,7 +28,7 @@ def launch_setup(context, *args, **kwargs):
             [FindPackageShare("cone_planner"), "config", "cone_planner.param.yaml"]
         ).perform(context)
 
-    vehicle_param_file = LaunchConfiguration("vehicle_info_param_file").perform(context)
+    vehicle_param_file = LaunchConfiguration("vehicle_param_file").perform(context)
 
     cone_planner_node = Node(
         package="cone_planner",
@@ -57,8 +57,7 @@ def generate_launch_description():
         )
 
     add_launch_arg("cone_planner_param_file", "")
-    add_launch_arg("vehicle_info_param_file",
-                   "/home/arafalski/autoware/install/f1tenth_vehicle_description/share/f1tenth_vehicle_description/config/vehicle_info.param.yaml")
+    add_launch_arg("vehicle_param_file", "")
 
     return LaunchDescription(
         [*declared_arguments, OpaqueFunction(function=launch_setup)]
