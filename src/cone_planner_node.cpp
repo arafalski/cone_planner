@@ -37,12 +37,10 @@ ConePlannerNode::ConePlannerNode(const rclcpp::NodeOptions & options)
     "~/input/pose", rclcpp::QoS{1}, [this](const PoseStamped::SharedPtr msg) { pose_ = msg; });
 
   {
-    RCLCPP_INFO(get_logger(), "Trying toget vehicle info");
     const auto vehicle_info = vehicle_info_util::VehicleInfoUtil(*this).getVehicleInfo();
     vehicle_shape_.length = vehicle_info.vehicle_length_m;
     vehicle_shape_.width = vehicle_info.vehicle_width_m;
     vehicle_shape_.base2back = vehicle_info.rear_overhang_m;
-    RCLCPP_INFO_STREAM(get_logger(), "Vehicle length: " << vehicle_shape_.length);
   }
 
   {
