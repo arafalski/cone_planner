@@ -20,9 +20,13 @@
 
 namespace
 {
+using autoware_auto_planning_msgs::msg::Trajectory;
+using autoware_auto_planning_msgs::msg::TrajectoryPoint;
 using geometry_msgs::msg::Pose;
 using geometry_msgs::msg::PoseStamped;
 using geometry_msgs::msg::TransformStamped;
+using cone_planner::PlannerWaypoint;
+using cone_planner::PlannerWaypoints;
 
 Pose transform_pose(const Pose& pose, const TransformStamped& transform)
 {
@@ -32,6 +36,62 @@ Pose transform_pose(const Pose& pose, const TransformStamped& transform)
   tf2::doTransform(orig_pose, transformed_pose, transform);
 
   return transformed_pose.pose;
+}
+
+Trajectory create_trajectory(
+  const PoseStamped& current_pose,
+  const PlannerWaypoints& planner_waypoints,
+  double velocity)
+{
+  Trajectory trajectory;
+  trajectory.header = planner_waypoints.header;
+
+  for (const auto& awp : planner_waypoints.waypoints) {
+    TrajectoryPoint point;
+
+    point.pose = awp.pose.pose;
+
+    point.pose.position.z = current_pose.pose.position.z;  // height = const
+    point.longitudinal_velocity_mps = velocity / 3.6;      // velocity = const
+
+    // switch sign by forward/backward
+    point.longitudinal_velocity_mps = (awp.is_back ? -1 : 1) * point.longitudinal_velocity_mps;
+
+    trajectory.points.push_back(point);
+  }
+
+  return trajectory;
+}
+
+std::vector<size_t> get_reversing_indices(const Trajectory& trajectory)
+{
+  std::vector<size_t> indices;
+
+  for (size_t i = 0; i < trajectory.points.size() - 1; ++i) {
+    if (
+      trajectory.points.at(i).longitudinal_velocity_mps *
+        trajectory.points.at(i + 1).longitudinal_velocity_mps < 0) {
+      indices.push_back(i);
+    }
+  }
+
+  return indices;
+}
+
+size_t get_next_target_index(
+  const size_t trajectory_size,
+  const std::vector<size_t>& reversing_indices,
+  const size_t current_target_index)
+{
+  if (!reversing_indices.empty()) {
+    for (const auto reversing_index : reversing_indices) {
+      if (reversing_index > current_target_index) {
+        return reversing_index;
+      }
+    }
+  }
+
+  return trajectory_size - 1;
 }
 
 } // namespace
@@ -54,6 +114,8 @@ ConePlannerNode::ConePlannerNode(const rclcpp::NodeOptions & options)
 
   pose_sub_ = create_subscription<PoseStamped>(
     "~/input/pose", rclcpp::QoS{1}, [this](const PoseStamped::SharedPtr msg) { pose_ = msg; });
+
+  waypoints_velocity_ = declare_parameter<double>("waypoints_velocity");
 
   {
     const auto vehicle_info = vehicle_info_util::VehicleInfoUtil(*this).getVehicleInfo();
@@ -87,11 +149,17 @@ ConePlannerNode::ConePlannerNode(const rclcpp::NodeOptions & options)
 ConePlannerParam ConePlannerNode::get_planner_param() {
   ConePlannerParam param{};
 
+  param.time_limit = declare_parameter<double>("time_limit");
+  param.minimum_turning_radius = declare_parameter<double>("minimum_turning_radius");
+
   param.theta_size = declare_parameter<int>("theta_size");
 
   param.obstacle_threshold = declare_parameter<int>("obstacle_threshold");
 
+  param.rrt_enable_update = declare_parameter<bool>("rrt_enable_update");
+  param.rrt_max_planning_time = declare_parameter<double>("rrt_max_planning_time");
   param.rrt_margin = declare_parameter<double>("rrt_margin");
+  param.rrt_neighbor_radius = declare_parameter<double>("rrt_neighbor_radius");
 
   return param;
 }
@@ -161,6 +229,21 @@ void ConePlannerNode::planTrajectory(const PoseStamped& goal_pose)
   const rclcpp::Time end = get_clock()->now();
 
   RCLCPP_INFO(get_logger(), "Freespace planning: %f [s]", (end - start).seconds());
+
+  if (result) {
+    RCLCPP_INFO(get_logger(), "Found goal!");
+    planned_trajectory_ = create_trajectory(*pose_,
+                                            cone_planner_->get_waypoints(),
+                                            waypoints_velocity_);
+    reversing_indices_ = get_reversing_indices(planned_trajectory_);
+    prev_target_index_ = 0;
+    target_index_ = get_next_target_index(planned_trajectory_.points.size(),
+                                          reversing_indices_,
+                                          prev_target_index_);
+  } else {
+    RCLCPP_INFO(get_logger(), "Can't find goal...");
+    reset();
+  }
 }
 
 TransformStamped ConePlannerNode::get_transform(

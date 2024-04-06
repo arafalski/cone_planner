@@ -113,6 +113,7 @@ public:
 
   void set_map(const OccupancyGrid& costmap);
   bool make_plan(const Pose& start_pose, const Pose& goal_pose);
+  const PlannerWaypoints& get_waypoints() const { return waypoints_; }
 
 private:
   void compute_collision_indexes(

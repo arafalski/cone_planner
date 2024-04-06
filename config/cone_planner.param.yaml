@@ -1,5 +1,6 @@
 /**:
   ros__parameters:
+    waypoints_velocity: 5.0
     vehicle_shape_margin_m: 1.0
     # base configs
     time_limit: 30000.0

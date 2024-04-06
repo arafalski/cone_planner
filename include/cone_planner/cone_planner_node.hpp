@@ -62,12 +62,17 @@ private:
 
   TransformStamped get_transform(const std::string& from, const std::string& to);
 
+  double waypoints_velocity_;
   VehicleShape vehicle_shape_;
 
   Trajectory::SharedPtr trajectory_;
   OccupancyGrid::SharedPtr occupancy_grid_;
   PoseStamped::SharedPtr pose_;
   Trajectory planned_trajectory_;
+  Trajectory partial_planned_trajectory_;
+  std::vector<size_t> reversing_indices_;
+  size_t prev_target_index_;
+  size_t target_index_;
   bool is_completed_ = false;
 
   ConePlannerPtr cone_planner_{nullptr};
