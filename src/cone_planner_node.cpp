@@ -94,6 +94,32 @@ size_t get_next_target_index(
   return trajectory_size - 1;
 }
 
+Trajectory get_partial_trajectory(
+  const Trajectory& trajectory,
+  const size_t start_index,
+  const size_t end_index)
+{
+  Trajectory partial_trajectory;
+  partial_trajectory.header = trajectory.header;
+  partial_trajectory.header.stamp = rclcpp::Clock().now();
+
+  partial_trajectory.points.reserve(trajectory.points.size());
+  for (size_t i = start_index; i <= end_index; ++i) {
+    partial_trajectory.points.push_back(trajectory.points.at(i));
+  }
+
+  // Modify velocity at start/end point
+  if (partial_trajectory.points.size() >= 2) {
+    partial_trajectory.points.front().longitudinal_velocity_mps =
+      partial_trajectory.points.at(1).longitudinal_velocity_mps;
+  }
+  if (!partial_trajectory.points.empty()) {
+    partial_trajectory.points.back().longitudinal_velocity_mps = 0;
+  }
+
+  return partial_trajectory;
+}
+
 } // namespace
 
 namespace cone_planner
@@ -164,6 +190,34 @@ ConePlannerParam ConePlannerNode::get_planner_param() {
   return param;
 }
 
+// void ConePlannerNode::update_target_index()
+// {
+//   const auto is_near_target =
+//     tier4_autoware_utils::calcDistance2d(planned_trajectory_.points.at(target_index_), *pose_) <
+//     node_param_.th_arrived_distance_m;
+
+//   const auto is_stopped = isStopped(odom_buffer_, node_param_.th_stopped_velocity_mps);
+
+//   if (is_near_target && is_stopped) {
+//     const auto new_target_index =
+//       getNextTargetIndex(planned_trajectory_.points.size(), reversing_indices_, target_index_);
+
+//     if (new_target_index == target_index_) {
+//       // Finished publishing all partial trajectories
+//       is_completed_ = true;
+//       RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Freespace planning completed");
+//       std_msgs::msg::Bool is_completed_msg;
+//       is_completed_msg.data = is_completed_;
+//       parking_state_pub_->publish(is_completed_msg);
+//     } else {
+//       // Switch to next partial trajectory
+//       prev_target_index_ = target_index_;
+//       target_index_ =
+//         getNextTargetIndex(planned_trajectory_.points.size(), reversing_indices_, target_index_);
+//     }
+//   }
+// }
+
 void ConePlannerNode::onTimer()
 {
   if (!trajectory_ || !occupancy_grid_ || !pose_) {
@@ -184,7 +238,16 @@ void ConePlannerNode::onTimer()
   reset();
   planTrajectory(goal_pose);
 
-  planned_trajectory_pub_->publish(planned_trajectory_);
+  // Stop
+  if (planned_trajectory_.points.size() <= 1) {
+    return;
+  }
+
+  // Update partial trajectory
+  // update_target_index();
+  partial_planned_trajectory_ = get_partial_trajectory(planned_trajectory_, prev_target_index_, target_index_);
+
+  planned_trajectory_pub_->publish(partial_planned_trajectory_);
 }
 
 PoseStamped ConePlannerNode::get_closest_pose()

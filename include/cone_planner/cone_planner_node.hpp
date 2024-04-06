@@ -59,6 +59,7 @@ private:
   void reset();
   void planTrajectory(const PoseStamped& goal_pose);
   PoseStamped get_closest_pose();
+  void update_target_index();
 
   TransformStamped get_transform(const std::string& from, const std::string& to);
 
