@@ -154,6 +154,13 @@ void ConePlannerNode::planTrajectory(const PoseStamped& goal_pose)
     goal_pose.pose,
     get_transform(occupancy_grid_->header.frame_id,
                   goal_pose.header.frame_id));
+
+  // execute planning
+  const rclcpp::Time start = get_clock()->now();
+  const bool result = cone_planner_->make_plan(current_pose_in_costmap_frame, goal_pose_in_costmap_frame);
+  const rclcpp::Time end = get_clock()->now();
+
+  RCLCPP_INFO(get_logger(), "Freespace planning: %f [s]", (end - start).seconds());
 }
 
 TransformStamped ConePlannerNode::get_transform(
