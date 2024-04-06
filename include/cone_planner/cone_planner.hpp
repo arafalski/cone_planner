@@ -17,13 +17,31 @@
 
 #include "cone_planner/visibility_control.hpp"
 
+#include <nav_msgs/msg/occupancy_grid.hpp>
+#include <vector>
+
 namespace cone_planner
 {
+using nav_msgs::msg::OccupancyGrid;
+
+struct ConePlannerParam
+{
+  int obstacle_threshold;  // obstacle threshold on grid [-]
+};
 
 class CONE_PLANNER_PUBLIC ConePlanner
 {
 public:
-  ConePlanner() = default;
+  ConePlanner(const ConePlannerParam& planner_param)
+    : planner_param_{planner_param} {}
+
+  void set_map(const OccupancyGrid& costmap);
+
+private:
+  ConePlannerParam planner_param_{};
+
+  OccupancyGrid costmap_{};
+  std::vector<std::vector<bool>> is_obstacle_table_{};
 };
 
 }  // namespace cone_planner

@@ -35,13 +35,24 @@ ConePlannerNode::ConePlannerNode(const rclcpp::NodeOptions & options)
   pose_sub_ = create_subscription<PoseStamped>(
     "~/input/pose", rclcpp::QoS{1}, [this](const PoseStamped::SharedPtr msg) { pose_ = msg; });
 
-  cone_planner_ = std::make_unique<ConePlanner>();
+  {
+    const auto conePlannerParam = get_planner_param();
+    cone_planner_ = std::make_unique<ConePlanner>(conePlannerParam);
+  }
 
   using namespace std::literals::chrono_literals;
   timer_ =
     rclcpp::create_timer(this, get_clock(), 100ms, std::bind(&ConePlannerNode::onTimer, this));
 
   RCLCPP_INFO_ONCE(get_logger(), "Initialized node\n");
+}
+
+ConePlannerParam ConePlannerNode::get_planner_param() {
+  ConePlannerParam param{};
+
+  param.obstacle_threshold = declare_parameter<int>("obstacle_threshold");
+
+  return param;
 }
 
 void ConePlannerNode::onTimer()
@@ -51,12 +62,27 @@ void ConePlannerNode::onTimer()
     return;
   }
 
-  reset();
+  if (is_completed_) {
+    return;
+  }
+
+  if (pose_->header.frame_id == "") {
+    return;
+  }
 
   [[maybe_unused]]const auto goal_point = get_closest_point();
+
+  reset();
   planTrajectory();
 
   planned_trajectory_pub_->publish(planned_trajectory_);
+}
+
+TrajectoryPoint ConePlannerNode::get_closest_point()
+{
+  const auto closest_idx =
+    motion_utils::findNearestIndex(trajectory_->points, pose_->pose.position);
+  return trajectory_->points.at(closest_idx);
 }
 
 void ConePlannerNode::reset()
@@ -67,16 +93,11 @@ void ConePlannerNode::reset()
 
 void ConePlannerNode::planTrajectory()
 {
-  if (!occupancy_grid_ || !pose_) {
+  if (!occupancy_grid_) {
     return;
   }
-}
 
-TrajectoryPoint ConePlannerNode::get_closest_point()
-{
-  const auto closest_idx =
-    motion_utils::findNearestIndex(trajectory_->points, pose_->pose.position);
-  return trajectory_->points.at(closest_idx);
+  cone_planner_->set_map(*occupancy_grid_);
 }
 
 }  // namespace cone_planner

@@ -47,6 +47,8 @@ private:
 
   rclcpp::TimerBase::SharedPtr timer_;
 
+  ConePlannerParam get_planner_param();
+
   void onTimer();
   void reset();
   void planTrajectory();
