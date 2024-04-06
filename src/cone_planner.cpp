@@ -18,9 +18,18 @@
 #include <tier4_autoware_utils/math/normalization.hpp>
 #include <tf2/utils.h>
 
-#include "freespace_planning_algorithms/rrtstar_core.hpp"
-
 #include <vector>
+
+namespace
+{
+
+rrtstar_core::Pose poseMsgToPose(const geometry_msgs::msg::Pose& pose_msg)
+{
+  return rrtstar_core::Pose{
+    pose_msg.position.x, pose_msg.position.y, tf2::getYaw(pose_msg.orientation)};
+}
+
+}  // namespace
 
 namespace cone_planner
 {
@@ -60,6 +69,36 @@ Pose index2pose(
   pose_local.orientation = createQuaternionFromYaw(yaw);
 
   return pose_local;
+}
+
+Pose transformPose(const Pose& pose, const TransformStamped& transform)
+{
+  geometry_msgs::msg::Pose transformed_pose;
+  tf2::doTransform(pose, transformed_pose, transform);
+
+  return transformed_pose;
+}
+
+Pose global2local(const OccupancyGrid& costmap, const Pose& pose_global)
+{
+  tf2::Transform tf_origin;
+  tf2::convert(costmap.info.origin, tf_origin);
+
+  TransformStamped transform;
+  transform.transform = tf2::toMsg(tf_origin.inverse());
+
+  return transformPose(pose_global, transform);
+}
+
+Pose local2global(const OccupancyGrid& costmap, const Pose& pose_local)
+{
+  tf2::Transform tf_origin;
+  tf2::convert(costmap.info.origin, tf_origin);
+
+  geometry_msgs::msg::TransformStamped transform;
+  transform.transform = tf2::toMsg(tf_origin);
+
+  return transformPose(pose_local, transform);
 }
 
 void ConePlanner::set_map(const OccupancyGrid& costmap) {
@@ -163,6 +202,152 @@ void ConePlanner::compute_collision_indexes(
   addIndex2d(front, right, vertex_indexes_2d);
   addIndex2d(back, right, vertex_indexes_2d);
   addIndex2d(back, left, vertex_indexes_2d);
+}
+
+bool ConePlanner::make_plan(const Pose& start_pose, const Pose& goal_pose)
+{
+  const rclcpp::Time begin = rclcpp::Clock(RCL_ROS_TIME).now();
+
+  start_pose_ = global2local(costmap_, start_pose);
+  goal_pose_ = global2local(costmap_, goal_pose);
+
+  const auto is_obstacle_free = [&](const rrtstar_core::Pose & pose) {
+    const int index_x = pose.x / costmap_.info.resolution;
+    const int index_y = pose.y / costmap_.info.resolution;
+    const int index_theta = discretizeAngle(pose.yaw, planner_param_.theta_size);
+    return !detect_collision(IndexXYT{index_x, index_y, index_theta});
+  };
+
+  const rrtstar_core::Pose lo{0, 0, 0};
+  const rrtstar_core::Pose hi{
+    costmap_.info.resolution * costmap_.info.width,
+    costmap_.info.resolution * costmap_.info.height,
+    M_PI};
+  const double radius = planner_param_.minimum_turning_radius;
+  const auto cspace = rrtstar_core::CSpace(lo, hi, radius, is_obstacle_free);
+  const auto x_start = poseMsgToPose(start_pose_);
+  const auto x_goal = poseMsgToPose(goal_pose_);
+
+  if (!is_obstacle_free(x_start)) {
+    return false;
+  }
+
+  if (!is_obstacle_free(x_goal)) {
+    return false;
+  }
+
+  const bool is_informed = true;
+  const double collision_check_resolution = planner_param_.rrt_margin * 2;
+  auto algo = rrtstar_core::RRTStar(
+    x_start,
+    x_goal,
+    planner_param_.rrt_neighbor_radius,
+    collision_check_resolution,
+    is_informed,
+    cspace);
+  while (true) {
+    const rclcpp::Time now = rclcpp::Clock(RCL_ROS_TIME).now();
+    const double msec = (now - begin).seconds() * 1000.0;
+
+    if (msec > planner_param_.time_limit) {
+      // break regardless of solution find or not
+      break;
+    }
+
+    if (algo.isSolutionFound()) {
+      if (!planner_param_.rrt_enable_update) {
+        break;
+      } else {
+        if (msec > planner_param_.rrt_max_planning_time) {
+          break;
+        }
+      }
+    }
+
+    algo.extend();
+  }
+
+  if (!algo.isSolutionFound()) {
+    return false;
+  }
+  const auto waypoints = algo.sampleSolutionWaypoints();
+  setRRTPath(waypoints);
+  return true;
+}
+
+bool ConePlanner::detect_collision(const IndexXYT& base_index) const
+{
+  if (coll_indexes_table_.empty()) {
+    std::cerr << "[abstract_algorithm] setMap has not yet been done." << std::endl;
+    return false;
+  }
+
+  const auto& vertex_indexes_2d = vertex_indexes_table_[base_index.theta];
+  for (const auto& vertex_index_2d : vertex_indexes_2d) {
+    IndexXYT vertex_index{vertex_index_2d.x, vertex_index_2d.y, 0};
+    // must slide to current base position
+    vertex_index.x += base_index.x;
+    vertex_index.y += base_index.y;
+    if (is_out_of_range(vertex_index)) {
+      return true;
+    }
+  }
+
+  const auto& coll_indexes_2d = coll_indexes_table_[base_index.theta];
+  for (const auto& coll_index_2d : coll_indexes_2d) {
+    int idx_theta = 0;  // whatever. Yaw is nothing to do with collision detection between grids.
+    IndexXYT coll_index{coll_index_2d.x, coll_index_2d.y, idx_theta};
+    // must slide to current base position
+    coll_index.x += base_index.x;
+    coll_index.y += base_index.y;
+
+    if (is_obs(coll_index)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void ConePlanner::setRRTPath(const std::vector<rrtstar_core::Pose>& waypoints)
+{
+  std_msgs::msg::Header header;
+  header.stamp = rclcpp::Clock(RCL_ROS_TIME).now();
+  header.frame_id = costmap_.header.frame_id;
+
+  waypoints_.header = header;
+  waypoints_.waypoints.clear();
+
+  for (size_t i = 0; i < waypoints.size(); ++i) {
+    auto & pt = waypoints.at(i);
+    geometry_msgs::msg::Pose pose_local;
+    pose_local.position.x = pt.x;
+    pose_local.position.y = pt.y;
+    pose_local.position.z = goal_pose_.position.z;
+    tf2::Quaternion quat;
+    quat.setRPY(0, 0, pt.yaw);
+    tf2::convert(quat, pose_local.orientation);
+
+    geometry_msgs::msg::PoseStamped pose;
+    pose.pose = local2global(costmap_, pose_local);
+    pose.header = header;
+    PlannerWaypoint pw;
+    if (0 == i) {
+      const auto & pt_now = waypoints.at(i);
+      const auto & pt_next = waypoints.at(i + 1);
+      const double inner_product =
+        cos(pt_now.yaw) * (pt_next.x - pt_now.x) + sin(pt_now.yaw) * (pt_next.y - pt_now.y);
+      pw.is_back = (inner_product < 0.0);
+    } else {
+      const auto & pt_pre = waypoints.at(i - 1);
+      const auto & pt_now = waypoints.at(i);
+      const double inner_product =
+        cos(pt_pre.yaw) * (pt_now.x - pt_pre.x) + sin(pt_pre.yaw) * (pt_now.y - pt_pre.y);
+      pw.is_back = !(inner_product > 0.0);
+    }
+    pw.pose = pose;
+    waypoints_.waypoints.push_back(pw);
+  }
 }
 
 }  // namespace cone_planner

@@ -17,13 +17,20 @@
 
 #include "cone_planner/visibility_control.hpp"
 
+#include <geometry_msgs/msg/pose.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <vehicle_info_util/vehicle_info_util.hpp>
+#include <tf2/utils.h>
+
+#include "freespace_planning_algorithms/rrtstar_core.hpp"
 
 #include <vector>
 
 namespace cone_planner
 {
+using geometry_msgs::msg::Pose;
+using geometry_msgs::msg::TransformStamped;
 using nav_msgs::msg::OccupancyGrid;
 
 struct IndexXY
@@ -60,6 +67,12 @@ struct VehicleShape
 
 struct ConePlannerParam
 {
+  // base configs
+  double time_limit;  // planning time limit [msec]
+
+  // robot configs
+  double minimum_turning_radius;  // [m]
+
   // search configs
   int theta_size; // discretized angle table size [-]
 
@@ -68,6 +81,23 @@ struct ConePlannerParam
 
   // planner configs
   double rrt_margin; // [m]
+  double rrt_neighbor_radius; // neighbor radius [m]
+  bool rrt_enable_update; // update solution even after feasible solution found with given time budget
+  double rrt_max_planning_time; // if enable_update is true, update is done before time elapsed [msec]
+};
+
+struct PlannerWaypoint
+{
+  geometry_msgs::msg::PoseStamped pose;
+  bool is_back = false;
+};
+
+struct PlannerWaypoints
+{
+  std_msgs::msg::Header header;
+  std::vector<PlannerWaypoint> waypoints;
+
+  double compute_length() const;
 };
 
 class CONE_PLANNER_PUBLIC ConePlanner
@@ -82,6 +112,7 @@ public:
                                original_vehicle_shape.base2back + planner_param.rrt_margin} {}
 
   void set_map(const OccupancyGrid& costmap);
+  bool make_plan(const Pose& start_pose, const Pose& goal_pose);
 
 private:
   void compute_collision_indexes(
@@ -89,6 +120,25 @@ private:
     std::vector<IndexXY> & indexes_2d,
     std::vector<IndexXY> & vertex_indexes_2d
   ) const;
+  bool detect_collision(const IndexXYT& base_index) const;
+  void setRRTPath(const std::vector<rrtstar_core::Pose>& waypoints);
+  inline bool is_out_of_range(const IndexXYT& index) const
+  {
+    if (index.x < 0 || static_cast<int>(costmap_.info.width) <= index.x) {
+      return true;
+    }
+    if (index.y < 0 || static_cast<int>(costmap_.info.height) <= index.y) {
+      return true;
+    }
+    return false;
+  }
+  inline bool is_obs(const IndexXYT& index) const
+  {
+    // NOTE: Accessing by .at() instead makes 1.2 times slower here.
+    // Also, boundary check is already done in isOutOfRange before calling this function.
+    // So, basically .at() is not necessary.
+    return is_obstacle_table_[index.y][index.x];
+  }
 
   ConePlannerParam planner_param_{};
   const VehicleShape original_vehicle_shape_{};
@@ -99,7 +149,12 @@ private:
   std::vector<std::vector<IndexXY>> vertex_indexes_table_{};
   std::vector<std::vector<bool>> is_obstacle_table_{};
 
+  Pose start_pose_;
+  Pose goal_pose_;
+
   bool is_collision_table_initialized_{};
+
+  PlannerWaypoints waypoints_;
 };
 
 }  // namespace cone_planner
