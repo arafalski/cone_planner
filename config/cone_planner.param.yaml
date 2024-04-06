@@ -1,16 +1,17 @@
 /**:
   ros__parameters:
-    waypoints_velocity: 5.0
-    vehicle_shape_margin_m: 1.0
+    waypoints_velocity: 4.0
+    vehicle_shape_margin_m: 0.4
     # base configs
-    time_limit: 30000.0
-    minimum_turning_radius: 9.0
+    time_limit: 20.0
+    minimum_turning_radius: 0.8
+    # minimum_turning_radius: 0.6479999995491431
     # search configs
     theta_size: 144
     # costmap configs
     obstacle_threshold: 100
     # planner configs
     rrt_enable_update: true
-    rrt_max_planning_time: 150.0
-    rrt_margin: 0.1
-    rrt_neighbor_radius: 8.0
+    rrt_max_planning_time: 10.0
+    rrt_margin: 0.2
+    rrt_neighbor_radius: 0.5

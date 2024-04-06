@@ -167,7 +167,7 @@ ConePlannerNode::ConePlannerNode(const rclcpp::NodeOptions & options)
 
   using namespace std::literals::chrono_literals;
   timer_ =
-    rclcpp::create_timer(this, get_clock(), 100ms, std::bind(&ConePlannerNode::onTimer, this));
+    rclcpp::create_timer(this, get_clock(), 300ms, std::bind(&ConePlannerNode::onTimer, this));
 
   RCLCPP_INFO_ONCE(get_logger(), "Initialized node\n");
 }
@@ -253,7 +253,7 @@ void ConePlannerNode::onTimer()
 PoseStamped ConePlannerNode::get_closest_pose()
 {
   const auto closest_idx =
-    motion_utils::findNearestIndex(trajectory_->points, pose_->pose.position);
+    (motion_utils::findNearestIndex(trajectory_->points, pose_->pose.position) + 25) % trajectory_->points.size();
   const auto closest_pose = trajectory_->points.at(closest_idx).pose;
 
   PoseStamped closest_pose_stamped{};
@@ -266,6 +266,7 @@ PoseStamped ConePlannerNode::get_closest_pose()
 void ConePlannerNode::reset()
 {
   planned_trajectory_ = Trajectory();
+  partial_planned_trajectory_ = Trajectory();
   is_completed_ = false;
 }
 
