@@ -1,5 +1,6 @@
 /**:
   ros__parameters:
+    vehicle_shape_margin_m: 1.0
     # search configs
     theta_size: 144
     # costmap configs

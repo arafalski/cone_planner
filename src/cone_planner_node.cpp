@@ -64,7 +64,14 @@ ConePlannerNode::ConePlannerNode(const rclcpp::NodeOptions & options)
 
   {
     const auto conePlannerParam = get_planner_param();
-    cone_planner_ = std::make_unique<ConePlanner>(conePlannerParam, vehicle_shape_);
+
+    const auto vehicle_shape_margin_m = declare_parameter<double>("vehicle_shape_margin_m");
+    VehicleShape extended_vehicle_shape = vehicle_shape_;
+    extended_vehicle_shape.length += vehicle_shape_margin_m;
+    extended_vehicle_shape.width += vehicle_shape_margin_m;
+    extended_vehicle_shape.base2back += vehicle_shape_margin_m / 2;
+
+    cone_planner_ = std::make_unique<ConePlanner>(conePlannerParam, extended_vehicle_shape);
   }
 
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(get_clock());
@@ -104,19 +111,25 @@ void ConePlannerNode::onTimer()
     return;
   }
 
-  [[maybe_unused]]const auto goal_point = get_closest_point();
+  const auto goal_pose = get_closest_pose();
 
   reset();
-  planTrajectory();
+  planTrajectory(goal_pose);
 
   planned_trajectory_pub_->publish(planned_trajectory_);
 }
 
-TrajectoryPoint ConePlannerNode::get_closest_point()
+PoseStamped ConePlannerNode::get_closest_pose()
 {
   const auto closest_idx =
     motion_utils::findNearestIndex(trajectory_->points, pose_->pose.position);
-  return trajectory_->points.at(closest_idx);
+  const auto closest_pose = trajectory_->points.at(closest_idx).pose;
+
+  PoseStamped closest_pose_stamped{};
+  closest_pose_stamped.header = trajectory_->header;
+  closest_pose_stamped.pose = closest_pose;
+
+  return closest_pose_stamped;
 }
 
 void ConePlannerNode::reset()
@@ -125,7 +138,7 @@ void ConePlannerNode::reset()
   is_completed_ = false;
 }
 
-void ConePlannerNode::planTrajectory()
+void ConePlannerNode::planTrajectory(const PoseStamped& goal_pose)
 {
   if (!occupancy_grid_ || !pose_) {
     return;
@@ -137,6 +150,10 @@ void ConePlannerNode::planTrajectory()
     pose_->pose,
     get_transform(occupancy_grid_->header.frame_id,
                   pose_->header.frame_id));
+  const auto goal_pose_in_costmap_frame = transform_pose(
+    goal_pose.pose,
+    get_transform(occupancy_grid_->header.frame_id,
+                  goal_pose.header.frame_id));
 }
 
 TransformStamped ConePlannerNode::get_transform(

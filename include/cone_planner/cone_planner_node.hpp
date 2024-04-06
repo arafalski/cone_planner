@@ -22,7 +22,6 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <autoware_auto_planning_msgs/msg/trajectory.hpp>
-#include <autoware_auto_planning_msgs/msg/trajectory_point.hpp>
 
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
@@ -33,7 +32,6 @@ namespace cone_planner
 {
 using ConePlannerPtr = std::unique_ptr<cone_planner::ConePlanner>;
 using autoware_auto_planning_msgs::msg::Trajectory;
-using autoware_auto_planning_msgs::msg::TrajectoryPoint;
 using nav_msgs::msg::OccupancyGrid;
 using geometry_msgs::msg::PoseStamped;
 using geometry_msgs::msg::TransformStamped;
@@ -59,8 +57,8 @@ private:
 
   void onTimer();
   void reset();
-  void planTrajectory();
-  TrajectoryPoint get_closest_point();
+  void planTrajectory(const PoseStamped& goal_pose);
+  PoseStamped get_closest_pose();
 
   TransformStamped get_transform(const std::string& from, const std::string& to);
 
