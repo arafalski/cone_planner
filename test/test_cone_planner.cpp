@@ -14,10 +14,3 @@
 
 #include "gtest/gtest.h"
 #include "cone_planner/cone_planner.hpp"
-
-TEST(TestConePlanner, TestHello) {
-  std::unique_ptr<cone_planner::ConePlanner> cone_planner_ =
-    std::make_unique<cone_planner::ConePlanner>();
-  auto result = cone_planner_->foo(999);
-  EXPECT_EQ(result, 999);
-}
