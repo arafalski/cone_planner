@@ -15,6 +15,7 @@
 #include "cone_planner/cone_planner_node.hpp"
 
 #include <motion_utils/trajectory/trajectory.hpp>
+#include <vehicle_info_util/vehicle_info_util.hpp>
 
 namespace cone_planner
 {
@@ -36,8 +37,17 @@ ConePlannerNode::ConePlannerNode(const rclcpp::NodeOptions & options)
     "~/input/pose", rclcpp::QoS{1}, [this](const PoseStamped::SharedPtr msg) { pose_ = msg; });
 
   {
+    RCLCPP_INFO(get_logger(), "Trying toget vehicle info");
+    const auto vehicle_info = vehicle_info_util::VehicleInfoUtil(*this).getVehicleInfo();
+    vehicle_shape_.length = vehicle_info.vehicle_length_m;
+    vehicle_shape_.width = vehicle_info.vehicle_width_m;
+    vehicle_shape_.base2back = vehicle_info.rear_overhang_m;
+    RCLCPP_INFO_STREAM(get_logger(), "Vehicle length: " << vehicle_shape_.length);
+  }
+
+  {
     const auto conePlannerParam = get_planner_param();
-    cone_planner_ = std::make_unique<ConePlanner>(conePlannerParam);
+    cone_planner_ = std::make_unique<ConePlanner>(conePlannerParam, vehicle_shape_);
   }
 
   using namespace std::literals::chrono_literals;
@@ -50,7 +60,11 @@ ConePlannerNode::ConePlannerNode(const rclcpp::NodeOptions & options)
 ConePlannerParam ConePlannerNode::get_planner_param() {
   ConePlannerParam param{};
 
+  param.theta_size = declare_parameter<int>("theta_size");
+
   param.obstacle_threshold = declare_parameter<int>("obstacle_threshold");
+
+  param.rrt_margin = declare_parameter<double>("rrt_margin");
 
   return param;
 }

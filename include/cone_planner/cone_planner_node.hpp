@@ -54,6 +54,8 @@ private:
   void planTrajectory();
   TrajectoryPoint get_closest_point();
 
+  VehicleShape vehicle_shape_;
+
   Trajectory::SharedPtr trajectory_;
   OccupancyGrid::SharedPtr occupancy_grid_;
   PoseStamped::SharedPtr pose_;

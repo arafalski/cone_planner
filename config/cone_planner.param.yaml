@@ -1,4 +1,8 @@
 /**:
   ros__parameters:
+    # search configs
+    theta_size: 144
     # costmap configs
     obstacle_threshold: 100
+    # planner configs
+    rrt_margin: 0.1
