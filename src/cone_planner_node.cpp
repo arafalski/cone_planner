@@ -136,6 +136,31 @@ Trajectory get_partial_trajectory(
   return partial_trajectory;
 }
 
+Trajectory create_stop_trajectory(const PoseStamped& current_pose)
+{
+  PlannerWaypoints waypoints;
+  PlannerWaypoint waypoint;
+
+  waypoints.header.stamp = rclcpp::Clock().now();
+  waypoints.header.frame_id = current_pose.header.frame_id;
+  waypoint.pose.header = waypoints.header;
+  waypoint.pose.pose = current_pose.pose;
+  waypoint.is_back = false;
+  waypoints.waypoints.push_back(waypoint);
+  waypoints.waypoints.push_back(waypoint);
+
+  return create_trajectory(current_pose, waypoints, 0.0);
+}
+
+Trajectory create_stop_trajectory(const Trajectory& trajectory)
+{
+  Trajectory stop_trajectory = trajectory;
+  for (size_t i = 0; i < trajectory.points.size(); ++i) {
+    stop_trajectory.points.at(i).longitudinal_velocity_mps = 0.0;
+  }
+  return stop_trajectory;
+}
+
 bool is_stopped(
   const std::deque<Odometry::SharedPtr>& odom_buffer,
   const double th_stopped_velocity_mps)
@@ -336,9 +361,13 @@ void ConePlannerNode::onTimer()
   }
 
   if (is_plan_required()) {
-    const auto goal_pose = get_closest_pose();
+    const auto stop_trajectory = partial_planned_trajectory_.points.empty()
+                                   ? create_stop_trajectory(*pose_)
+                                   : create_stop_trajectory(partial_planned_trajectory_);
+    planned_trajectory_pub_->publish(stop_trajectory);
 
     reset();
+    const auto goal_pose = get_closest_pose();
     planTrajectory(goal_pose);
   }
 
