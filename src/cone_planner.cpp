@@ -350,4 +350,18 @@ void ConePlanner::setRRTPath(const std::vector<rrtstar_core::Pose>& waypoints)
   }
 }
 
+bool ConePlanner::has_obstacle_on_trajectory(const PoseArray& trajectory) const
+{
+  for (const auto& pose : trajectory.poses) {
+    const auto pose_local = global2local(costmap_, pose);
+    const auto index = pose2index(costmap_, pose_local, planner_param_.theta_size);
+
+    if (detect_collision(index)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 }  // namespace cone_planner

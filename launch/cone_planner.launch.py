@@ -38,6 +38,7 @@ def launch_setup(context, *args, **kwargs):
             ("~/input/occupancy_grid", "/map"),
             ("~/input/pose", "/localization/cartographer/pose"),
             ("~/input/trajectory", "/planning/racing_planner/trajectory"),
+            ("~/input/odom", "/localization/kinematic_state"),
             ("~/output/trajectory", "/planning/racing_planner/avoidance/trajectory"),
         ],
         parameters=[param_path, vehicle_param_file],

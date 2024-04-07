@@ -18,6 +18,7 @@
 #include "cone_planner/visibility_control.hpp"
 
 #include <geometry_msgs/msg/pose.hpp>
+#include <geometry_msgs/msg/pose_array.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <vehicle_info_util/vehicle_info_util.hpp>
@@ -30,6 +31,7 @@
 namespace cone_planner
 {
 using geometry_msgs::msg::Pose;
+using geometry_msgs::msg::PoseArray;
 using geometry_msgs::msg::TransformStamped;
 using nav_msgs::msg::OccupancyGrid;
 
@@ -114,6 +116,7 @@ public:
   void set_map(const OccupancyGrid& costmap);
   bool make_plan(const Pose& start_pose, const Pose& goal_pose);
   const PlannerWaypoints& get_waypoints() const { return waypoints_; }
+  bool has_obstacle_on_trajectory(const PoseArray& trajectory) const;
 
 private:
   void compute_collision_indexes(

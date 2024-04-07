@@ -15,6 +15,8 @@
 #include "cone_planner/cone_planner_node.hpp"
 
 #include <geometry_msgs/msg/pose.hpp>
+#include <geometry_msgs/msg/pose_array.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <motion_utils/trajectory/trajectory.hpp>
 #include <vehicle_info_util/vehicle_info_util.hpp>
 
@@ -23,10 +25,24 @@ namespace
 using autoware_auto_planning_msgs::msg::Trajectory;
 using autoware_auto_planning_msgs::msg::TrajectoryPoint;
 using geometry_msgs::msg::Pose;
+using geometry_msgs::msg::PoseArray;
 using geometry_msgs::msg::PoseStamped;
 using geometry_msgs::msg::TransformStamped;
+using nav_msgs::msg::Odometry;
 using cone_planner::PlannerWaypoint;
 using cone_planner::PlannerWaypoints;
+
+PoseArray trajectory2PoseArray(const Trajectory& trajectory)
+{
+  PoseArray pose_array;
+  pose_array.header = trajectory.header;
+
+  for (const auto& point : trajectory.points) {
+    pose_array.poses.push_back(point.pose);
+  }
+
+  return pose_array;
+}
 
 Pose transform_pose(const Pose& pose, const TransformStamped& transform)
 {
@@ -120,6 +136,24 @@ Trajectory get_partial_trajectory(
   return partial_trajectory;
 }
 
+bool is_stopped(
+  const std::deque<Odometry::SharedPtr>& odom_buffer,
+  const double th_stopped_velocity_mps)
+{
+  for (const auto& odom : odom_buffer) {
+    if (std::abs(odom->twist.twist.linear.x) > th_stopped_velocity_mps) {
+      return false;
+    }
+  }
+  return true;
+}
+
+double calc_distance_2d(const Trajectory& trajectory, const Pose& pose)
+{
+  const auto idx = motion_utils::findNearestIndex(trajectory.points, pose.position);
+  return tier4_autoware_utils::calcDistance2d(trajectory.points.at(idx), pose);
+}
+
 } // namespace
 
 namespace cone_planner
@@ -128,6 +162,8 @@ namespace cone_planner
 ConePlannerNode::ConePlannerNode(const rclcpp::NodeOptions & options)
 : Node("cone_planner", options)
 {
+  using std::placeholders::_1;
+
   planned_trajectory_pub_ = create_publisher<Trajectory>("~/output/trajectory", rclcpp::QoS{1});
 
   trajectory_sub_ = create_subscription<Trajectory>(
@@ -141,7 +177,16 @@ ConePlannerNode::ConePlannerNode(const rclcpp::NodeOptions & options)
   pose_sub_ = create_subscription<PoseStamped>(
     "~/input/pose", rclcpp::QoS{1}, [this](const PoseStamped::SharedPtr msg) { pose_ = msg; });
 
+  odom_sub_ = create_subscription<Odometry>(
+    "~/input/odom", rclcpp::QoS{100}, std::bind(&ConePlannerNode::on_odometry, this, _1));
+
   waypoints_velocity_ = declare_parameter<double>("waypoints_velocity");
+  th_arrived_distance_m_ = declare_parameter<double>("th_arrived_distance_m");
+  th_stopped_time_sec_ = declare_parameter<double>("th_stopped_time_sec");
+  th_stopped_velocity_mps_ = declare_parameter<double>("th_stopped_velocity_mps");
+  th_course_out_distance_m_ = declare_parameter<double>("th_course_out_distance_m");
+  replan_when_obstacle_found_ = declare_parameter<bool>("replan_when_obstacle_found");
+  replan_when_course_out_ = declare_parameter<bool>("replan_when_course_out");
 
   {
     const auto vehicle_info = vehicle_info_util::VehicleInfoUtil(*this).getVehicleInfo();
@@ -165,11 +210,33 @@ ConePlannerNode::ConePlannerNode(const rclcpp::NodeOptions & options)
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
-  using namespace std::literals::chrono_literals;
-  timer_ =
-    rclcpp::create_timer(this, get_clock(), 300ms, std::bind(&ConePlannerNode::onTimer, this));
+  {
+    const auto period_ns = rclcpp::Rate(declare_parameter<double>("update_rate")).period();
+    timer_ = rclcpp::create_timer(this,
+                                  get_clock(),
+                                  period_ns,
+                                  std::bind(&ConePlannerNode::onTimer, this));
+  }
 
   RCLCPP_INFO_ONCE(get_logger(), "Initialized node\n");
+}
+
+void ConePlannerNode::on_odometry(const Odometry::SharedPtr msg) {
+  odom_ = msg;
+
+  odom_buffer_.push_back(msg);
+
+  // Delete old data in buffer
+  while (true) {
+    const auto time_diff =
+      rclcpp::Time(msg->header.stamp) - rclcpp::Time(odom_buffer_.front()->header.stamp);
+
+    if (time_diff.seconds() < th_stopped_time_sec_) {
+      break;
+    }
+
+    odom_buffer_.pop_front();
+  }
 }
 
 ConePlannerParam ConePlannerNode::get_planner_param() {
@@ -190,53 +257,90 @@ ConePlannerParam ConePlannerNode::get_planner_param() {
   return param;
 }
 
-// void ConePlannerNode::update_target_index()
-// {
-//   const auto is_near_target =
-//     tier4_autoware_utils::calcDistance2d(planned_trajectory_.points.at(target_index_), *pose_) <
-//     node_param_.th_arrived_distance_m;
+void ConePlannerNode::update_target_index()
+{
+  const auto is_near_target =
+    tier4_autoware_utils::calcDistance2d(planned_trajectory_.points.at(target_index_), *pose_) < th_arrived_distance_m_;
 
-//   const auto is_stopped = isStopped(odom_buffer_, node_param_.th_stopped_velocity_mps);
+  const auto stopped = is_stopped(odom_buffer_, th_stopped_velocity_mps_);
 
-//   if (is_near_target && is_stopped) {
-//     const auto new_target_index =
-//       getNextTargetIndex(planned_trajectory_.points.size(), reversing_indices_, target_index_);
+  if (is_near_target && stopped) {
+    const auto new_target_index =
+      get_next_target_index(planned_trajectory_.points.size(), reversing_indices_, target_index_);
 
-//     if (new_target_index == target_index_) {
-//       // Finished publishing all partial trajectories
-//       is_completed_ = true;
-//       RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Freespace planning completed");
-//       std_msgs::msg::Bool is_completed_msg;
-//       is_completed_msg.data = is_completed_;
-//       parking_state_pub_->publish(is_completed_msg);
-//     } else {
-//       // Switch to next partial trajectory
-//       prev_target_index_ = target_index_;
-//       target_index_ =
-//         getNextTargetIndex(planned_trajectory_.points.size(), reversing_indices_, target_index_);
-//     }
-//   }
-// }
+    if (new_target_index == target_index_) {
+      // Finished publishing all partial trajectories
+      is_completed_ = true;
+      RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Freespace planning completed");
+      // std_msgs::msg::Bool is_completed_msg;
+      // is_completed_msg.data = is_completed_;
+
+      // parking_state_pub_->publish(is_completed_msg);
+    } else {
+      // Switch to next partial trajectory
+      prev_target_index_ = target_index_;
+      target_index_ =
+        get_next_target_index(planned_trajectory_.points.size(), reversing_indices_, target_index_);
+    }
+  }
+}
+
+bool ConePlannerNode::is_plan_required()
+{
+  if (planned_trajectory_.points.empty()) {
+    return true;
+  }
+
+  if (replan_when_obstacle_found_) {
+    cone_planner_->set_map(*occupancy_grid_);
+
+    const size_t nearest_index_partial =
+      motion_utils::findNearestIndex(partial_planned_trajectory_.points, pose_->pose.position);
+    const size_t end_index_partial = partial_planned_trajectory_.points.size() - 1;
+
+    const auto forward_trajectory = get_partial_trajectory(partial_planned_trajectory_,
+                                                           nearest_index_partial,
+                                                           end_index_partial);
+    const bool is_obstacle_found = cone_planner_->has_obstacle_on_trajectory(trajectory2PoseArray(forward_trajectory));
+    if (is_obstacle_found) {
+      RCLCPP_INFO(get_logger(), "Found obstacle");
+      return true;
+    }
+  }
+
+  if (replan_when_course_out_) {
+    const bool is_course_out = calc_distance_2d(planned_trajectory_, pose_->pose) > th_course_out_distance_m_;
+    if (is_course_out) {
+      RCLCPP_INFO(get_logger(), "Course out");
+      return true;
+    }
+  }
+
+  return false;
+}
 
 void ConePlannerNode::onTimer()
 {
-  if (!trajectory_ || !occupancy_grid_ || !pose_) {
+  if (!trajectory_ || !occupancy_grid_ || !pose_ || !odom_) {
     RCLCPP_INFO(get_logger(), "Data not ready\n");
     return;
   }
 
-  if (is_completed_) {
-    return;
-  }
+  // if (is_completed_) {
+  //   return;
+  // }
 
+  // TODO: Get from Odometry
   if (pose_->header.frame_id == "") {
     return;
   }
 
-  const auto goal_pose = get_closest_pose();
+  if (is_plan_required()) {
+    const auto goal_pose = get_closest_pose();
 
-  reset();
-  planTrajectory(goal_pose);
+    reset();
+    planTrajectory(goal_pose);
+  }
 
   // Stop
   if (planned_trajectory_.points.size() <= 1) {
@@ -244,7 +348,7 @@ void ConePlannerNode::onTimer()
   }
 
   // Update partial trajectory
-  // update_target_index();
+  update_target_index();
   partial_planned_trajectory_ = get_partial_trajectory(planned_trajectory_, prev_target_index_, target_index_);
 
   planned_trajectory_pub_->publish(partial_planned_trajectory_);
