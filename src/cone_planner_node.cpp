@@ -195,8 +195,10 @@ ConePlannerNode::ConePlannerNode(const rclcpp::NodeOptions & options)
     "~/input/trajectory", rclcpp::QoS{1},
     [this](const Trajectory::SharedPtr msg) { trajectory_ = msg; });
 
+  auto occupancy_grid_qos = rclcpp::QoS{1};
+  occupancy_grid_qos.best_effort();
   occupancy_grid_sub_ = create_subscription<OccupancyGrid>(
-    "~/input/occupancy_grid", rclcpp::QoS{1},
+    "~/input/occupancy_grid", occupancy_grid_qos,
     [this](const OccupancyGrid::SharedPtr msg) { occupancy_grid_ = msg; });
 
   pose_sub_ = create_subscription<PoseStamped>(
@@ -316,6 +318,11 @@ bool ConePlannerNode::is_plan_required()
     return true;
   }
 
+  const auto dist_to_goal = tier4_autoware_utils::calcDistance2d(planned_trajectory_.points.back(), *pose_);
+  if (dist_to_goal < 3.0) {
+    return true;
+  }
+
   if (replan_when_obstacle_found_) {
     cone_planner_->set_map(*occupancy_grid_);
 
@@ -365,6 +372,7 @@ void ConePlannerNode::onTimer()
                                    ? create_stop_trajectory(*pose_)
                                    : create_stop_trajectory(partial_planned_trajectory_);
     planned_trajectory_pub_->publish(stop_trajectory);
+    RCLCPP_INFO(get_logger(), "Started replanning");
 
     reset();
     const auto goal_pose = get_closest_pose();
