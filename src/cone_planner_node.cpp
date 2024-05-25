@@ -150,14 +150,14 @@ Trajectory create_stop_trajectory(const PoseStamped& current_pose)
   waypoints.waypoints.push_back(waypoint);
   waypoints.waypoints.push_back(waypoint);
 
-  return create_trajectory(current_pose, waypoints, -1.0);
+  return create_trajectory(current_pose, waypoints, 0.0);
 }
 
 Trajectory create_stop_trajectory(const Trajectory& trajectory)
 {
   Trajectory stop_trajectory = trajectory;
   for (size_t i = 0; i < trajectory.points.size(); ++i) {
-    stop_trajectory.points.at(i).longitudinal_velocity_mps = -1.0;
+    stop_trajectory.points.at(i).longitudinal_velocity_mps = 0.0;
   }
   return stop_trajectory;
 }
@@ -320,7 +320,7 @@ bool ConePlannerNode::is_plan_required()
   }
 
   const auto dist_to_goal = tier4_autoware_utils::calcDistance2d(planned_trajectory_.points.back(), *pose_);
-  if (dist_to_goal < 4.0) {
+  if (dist_to_goal < 1.5) {
     return true;
   }
 
@@ -382,6 +382,10 @@ void ConePlannerNode::onTimer()
 
   // Stop
   if (planned_trajectory_.points.size() <= 1) {
+    const auto stop_trajectory = partial_planned_trajectory_.points.empty()
+                                   ? create_stop_trajectory(*pose_)
+                                   : create_stop_trajectory(partial_planned_trajectory_);
+    planned_trajectory_pub_->publish(stop_trajectory);
     return;
   }
 
@@ -395,7 +399,7 @@ void ConePlannerNode::onTimer()
 PoseStamped ConePlannerNode::get_closest_pose()
 {
   const auto closest_idx =
-    (motion_utils::findNearestIndex(trajectory_->points, pose_->pose.position) + 35) % trajectory_->points.size();
+    (motion_utils::findNearestIndex(trajectory_->points, pose_->pose.position) + 20) % trajectory_->points.size();
   const auto closest_pose = trajectory_->points.at(closest_idx).pose;
 
   PoseStamped closest_pose_stamped{};

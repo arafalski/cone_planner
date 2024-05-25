@@ -1,8 +1,8 @@
 /**:
   ros__parameters:
-    update_rate: 3.0
-    waypoints_velocity: 2.0
-    vehicle_shape_margin_m: 0.3
+    update_rate: 10.0
+    waypoints_velocity: 1.5
+    vehicle_shape_margin_m: 0.2
     th_arrived_distance_m: 1.0
     th_stopped_time_sec: 0.5
     th_stopped_velocity_mps: 0.01
@@ -10,7 +10,7 @@
     replan_when_obstacle_found: true
     replan_when_course_out: true
     # base configs
-    time_limit: 30.0
+    time_limit: 1000.0
     minimum_turning_radius: 0.6479999995491431
     # search configs
     theta_size: 144
@@ -18,6 +18,6 @@
     obstacle_threshold: 100
     # planner configs
     rrt_enable_update: true
-    rrt_max_planning_time: 15.0
+    rrt_max_planning_time: 1000.0
     rrt_margin: 0.1
-    rrt_neighbor_radius: 50.0
+    rrt_neighbor_radius: 10.0
