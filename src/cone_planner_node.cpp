@@ -180,6 +180,16 @@ double calc_distance_2d(const Trajectory& trajectory, const Pose& pose)
   return tier4_autoware_utils::calcDistance2d(trajectory.points.at(idx), pose);
 }
 
+double calc_trajectory_length(const Trajectory& trajectory)
+{
+  double length{};
+  for (std::size_t i = 1; i < trajectory.points.size(); i++) {
+    length += tier4_autoware_utils::calcDistance2d(trajectory.points.at(i - 1), trajectory.points.at(i));
+  }
+
+  return length;
+}
+
 } // namespace
 
 namespace cone_planner
@@ -320,7 +330,7 @@ bool ConePlannerNode::is_plan_required()
   }
 
   const auto dist_to_goal = tier4_autoware_utils::calcDistance2d(planned_trajectory_.points.back(), *pose_);
-  if (dist_to_goal < 1.5) {
+  if (dist_to_goal < 2.5) {
     return true;
   }
 
@@ -369,9 +379,13 @@ void ConePlannerNode::onTimer()
   }
 
   if (is_plan_required()) {
+    if (partial_planned_trajectory_.points.empty()) {
+      RCLCPP_INFO(get_logger(), "Stop trajectory from pose");
+    }
     const auto stop_trajectory = partial_planned_trajectory_.points.empty()
                                    ? create_stop_trajectory(*pose_)
                                    : create_stop_trajectory(partial_planned_trajectory_);
+    RCLCPP_INFO(get_logger(), "Stop trajectory length: %.2f", calc_trajectory_length(stop_trajectory));
     planned_trajectory_pub_->publish(stop_trajectory);
     RCLCPP_INFO(get_logger(), "Started replanning");
 
@@ -380,26 +394,32 @@ void ConePlannerNode::onTimer()
     planTrajectory(goal_pose);
   }
 
+  const auto planned_trajectory_length = calc_trajectory_length(planned_trajectory_);
+  RCLCPP_INFO(get_logger(), "Trajectory length: %.2f", planned_trajectory_length);
   // Stop
-  if (planned_trajectory_.points.size() <= 1) {
-    const auto stop_trajectory = partial_planned_trajectory_.points.empty()
+  if (planned_trajectory_.points.size() <= 1 || planned_trajectory_length < 2.0 || planned_trajectory_length > 10.0) {
+    if (partial_planned_trajectory_.points.empty()) {
+      RCLCPP_INFO(get_logger(), "Stop trajectory from pose");
+    }
+    const auto stop_trajectory = planned_trajectory_.points.empty()
                                    ? create_stop_trajectory(*pose_)
-                                   : create_stop_trajectory(partial_planned_trajectory_);
+                                   : create_stop_trajectory(planned_trajectory_);
+    RCLCPP_INFO(get_logger(), "Stop trajectory length: %.2f", calc_trajectory_length(stop_trajectory));
     planned_trajectory_pub_->publish(stop_trajectory);
     return;
   }
 
+
   // Update partial trajectory
   update_target_index();
   partial_planned_trajectory_ = get_partial_trajectory(planned_trajectory_, prev_target_index_, target_index_);
-
   planned_trajectory_pub_->publish(partial_planned_trajectory_);
 }
 
 PoseStamped ConePlannerNode::get_closest_pose()
 {
   const auto closest_idx =
-    (motion_utils::findNearestIndex(trajectory_->points, pose_->pose.position) + 20) % trajectory_->points.size();
+    (motion_utils::findNearestIndex(trajectory_->points, pose_->pose.position) + 25) % trajectory_->points.size();
   const auto closest_pose = trajectory_->points.at(closest_idx).pose;
 
   PoseStamped closest_pose_stamped{};
