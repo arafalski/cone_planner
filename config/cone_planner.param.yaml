@@ -1,7 +1,7 @@
 /**:
   ros__parameters:
     update_rate: 10.0
-    waypoints_velocity: 1.5
+    waypoints_velocity: 2.0
     vehicle_shape_margin_m: 0.2
     th_arrived_distance_m: 1.0
     th_stopped_time_sec: 0.5
