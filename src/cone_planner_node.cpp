@@ -227,6 +227,7 @@ ConePlannerNode::ConePlannerNode(const rclcpp::NodeOptions & options)
   th_stopped_time_sec_ = declare_parameter<double>("th_stopped_time_sec");
   th_stopped_velocity_mps_ = declare_parameter<double>("th_stopped_velocity_mps");
   th_course_out_distance_m_ = declare_parameter<double>("th_course_out_distance_m");
+  c_space_margin_ = declare_parameter<double>("c_space_margin_m");
   replan_when_obstacle_found_ = declare_parameter<bool>("replan_when_obstacle_found");
   replan_when_course_out_ = declare_parameter<bool>("replan_when_course_out");
 
@@ -457,10 +458,9 @@ void ConePlannerNode::planTrajectory(const PoseStamped& goal_pose)
 
   // execute planning
   const rclcpp::Time start = get_clock()->now();
-  const double c_space_margin = 2.0;
   const bool result = cone_planner_->make_plan(current_pose_in_costmap_frame,
                                                goal_pose_in_costmap_frame,
-                                               c_space_margin);
+                                               c_space_margin_);
   const rclcpp::Time end = get_clock()->now();
 
   RCLCPP_INFO(get_logger(), "Freespace planning: %f [s]", (end - start).seconds());
