@@ -182,6 +182,10 @@ double calc_distance_2d(const Trajectory& trajectory, const Pose& pose)
 
 double calc_trajectory_length(const Trajectory& trajectory)
 {
+  if (trajectory.points.size() < 2) {
+    return 0.0;
+  }
+
   double length{};
   for (std::size_t i = 1; i < trajectory.points.size(); i++) {
     length += tier4_autoware_utils::calcDistance2d(trajectory.points.at(i - 1), trajectory.points.at(i));
@@ -330,7 +334,7 @@ bool ConePlannerNode::is_plan_required()
   }
 
   const auto dist_to_goal = tier4_autoware_utils::calcDistance2d(planned_trajectory_.points.back(), *pose_);
-  if (dist_to_goal < 2.5) {
+  if (dist_to_goal < 1.5) {
     return true;
   }
 
@@ -394,10 +398,8 @@ void ConePlannerNode::onTimer()
     planTrajectory(goal_pose);
   }
 
-  const auto planned_trajectory_length = calc_trajectory_length(planned_trajectory_);
-  RCLCPP_INFO(get_logger(), "Trajectory length: %.2f", planned_trajectory_length);
   // Stop
-  if (planned_trajectory_.points.size() <= 1 || planned_trajectory_length < 2.0 || planned_trajectory_length > 10.0) {
+  if (planned_trajectory_.points.size() <= 1) {
     if (partial_planned_trajectory_.points.empty()) {
       RCLCPP_INFO(get_logger(), "Stop trajectory from pose");
     }
@@ -455,7 +457,10 @@ void ConePlannerNode::planTrajectory(const PoseStamped& goal_pose)
 
   // execute planning
   const rclcpp::Time start = get_clock()->now();
-  const bool result = cone_planner_->make_plan(current_pose_in_costmap_frame, goal_pose_in_costmap_frame);
+  const double c_space_margin = 2.0;
+  const bool result = cone_planner_->make_plan(current_pose_in_costmap_frame,
+                                               goal_pose_in_costmap_frame,
+                                               c_space_margin);
   const rclcpp::Time end = get_clock()->now();
 
   RCLCPP_INFO(get_logger(), "Freespace planning: %f [s]", (end - start).seconds());

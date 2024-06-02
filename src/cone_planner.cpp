@@ -204,7 +204,7 @@ void ConePlanner::compute_collision_indexes(
   addIndex2d(back, left, vertex_indexes_2d);
 }
 
-bool ConePlanner::make_plan(const Pose& start_pose, const Pose& goal_pose)
+bool ConePlanner::make_plan(const Pose& start_pose, const Pose& goal_pose, double c_space_margin)
 {
   const rclcpp::Time begin = rclcpp::Clock(RCL_ROS_TIME).now();
 
@@ -218,15 +218,26 @@ bool ConePlanner::make_plan(const Pose& start_pose, const Pose& goal_pose)
     return !detect_collision(IndexXYT{index_x, index_y, index_theta});
   };
 
-  const rrtstar_core::Pose lo{0, 0, 0};
-  const rrtstar_core::Pose hi{
-    costmap_.info.resolution * costmap_.info.width,
-    costmap_.info.resolution * costmap_.info.height,
-    M_PI};
-  const double radius = planner_param_.minimum_turning_radius;
-  const auto cspace = rrtstar_core::CSpace(lo, hi, radius, is_obstacle_free);
+  // const rrtstar_core::Pose lo{0, 0, 0};
+  // const rrtstar_core::Pose hi{
+  //   costmap_.info.resolution * costmap_.info.width,
+  //   costmap_.info.resolution * costmap_.info.height,
+  //   M_PI};
   const auto x_start = poseMsgToPose(start_pose_);
   const auto x_goal = poseMsgToPose(goal_pose_);
+
+  const auto map_width = static_cast<double>(costmap_.info.resolution * costmap_.info.width);
+  const auto map_height = static_cast<double>(costmap_.info.resolution * costmap_.info.height);
+
+  const double min_x = std::max(std::min(x_start.x, x_goal.x) - c_space_margin, 0.0);
+  const double max_x = std::min(std::max(x_start.x, x_goal.x) + c_space_margin, map_width);
+  const double min_y = std::max(std::min(x_start.y, x_goal.y) - c_space_margin, 0.0);
+  const double max_y = std::min(std::max(x_start.y, x_goal.y) + c_space_margin, map_height);
+
+  const rrtstar_core::Pose lo{min_x, min_y, 0};
+  const rrtstar_core::Pose hi{max_x, max_y, M_PI};
+  const double radius = planner_param_.minimum_turning_radius;
+  const auto cspace = rrtstar_core::CSpace(lo, hi, radius, is_obstacle_free);
 
   if (!is_obstacle_free(x_start)) {
     return false;

@@ -114,7 +114,7 @@ public:
                                original_vehicle_shape.base2back + planner_param.rrt_margin} {}
 
   void set_map(const OccupancyGrid& costmap);
-  bool make_plan(const Pose& start_pose, const Pose& goal_pose);
+  bool make_plan(const Pose& start_pose, const Pose& goal_pose, double c_space_margin);
   const PlannerWaypoints& get_waypoints() const { return waypoints_; }
   bool has_obstacle_on_trajectory(const PoseArray& trajectory) const;
 
