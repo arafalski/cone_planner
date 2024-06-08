@@ -14,6 +14,8 @@
 
 #include "cone_planner/cone_planner_node.hpp"
 
+#include <chrono>
+
 #include <geometry_msgs/msg/pose.hpp>
 #include <geometry_msgs/msg/pose_array.hpp>
 #include <std_msgs/msg/bool.hpp>
@@ -334,7 +336,7 @@ bool ConePlannerNode::is_plan_required()
     return true;
   }
 
-  const auto dist_to_goal = tier4_autoware_utils::calcDistance2d(planned_trajectory_.points.back(), *pose_);
+  const auto dist_to_goal = tier4_autoware_utils::calcDistance2d(partial_planned_trajectory_.points.back(), *pose_);
   if (dist_to_goal < 1.5) {
     return true;
   }
@@ -357,7 +359,7 @@ bool ConePlannerNode::is_plan_required()
   }
 
   if (replan_when_course_out_) {
-    const bool is_course_out = calc_distance_2d(planned_trajectory_, pose_->pose) > th_course_out_distance_m_;
+    const bool is_course_out = calc_distance_2d(partial_planned_trajectory_, pose_->pose) > th_course_out_distance_m_;
     if (is_course_out) {
       RCLCPP_INFO(get_logger(), "Course out");
       return true;
@@ -374,11 +376,6 @@ void ConePlannerNode::onTimer()
     return;
   }
 
-  // if (is_completed_) {
-  //   return;
-  // }
-
-  // TODO: Get from Odometry
   if (pose_->header.frame_id == "") {
     return;
   }
