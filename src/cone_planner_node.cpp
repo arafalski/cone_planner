@@ -140,17 +140,28 @@ Trajectory get_partial_trajectory(
 
 Trajectory create_stop_trajectory(const PoseStamped& current_pose)
 {
+  constexpr size_t num_of_points_to_add = 5;
   PlannerWaypoints waypoints;
-  PlannerWaypoint waypoint;
-
   waypoints.header.stamp = rclcpp::Clock().now();
   waypoints.header.frame_id = current_pose.header.frame_id;
-  waypoint.pose.header = waypoints.header;
-  waypoint.pose.pose = current_pose.pose;
-  waypoint.is_back = false;
-  waypoints.waypoints.push_back(waypoint);
-  waypoints.waypoints.push_back(waypoint);
-  waypoints.waypoints.push_back(waypoint);
+  waypoints.waypoints.reserve(num_of_points_to_add);
+
+  const auto heading_angle = tf2::getYaw(current_pose.pose.orientation);
+  double offset{};
+
+  for (size_t i = 0; i < num_of_points_to_add; i++) {
+    auto pose = current_pose.pose;
+    pose.position.x += offset * std::cos(heading_angle);
+    pose.position.y += offset * std::sin(heading_angle);
+
+    PlannerWaypoint waypoint;
+    waypoint.pose.header = waypoints.header;
+    waypoint.pose.pose = pose;
+
+    waypoints.waypoints.push_back(waypoint);
+
+    offset += 0.1;
+  }
 
   return create_trajectory(current_pose, waypoints, 0.0);
 }
@@ -317,10 +328,6 @@ void ConePlannerNode::update_target_index()
       // Finished publishing all partial trajectories
       is_completed_ = true;
       RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Freespace planning completed");
-      // std_msgs::msg::Bool is_completed_msg;
-      // is_completed_msg.data = is_completed_;
-
-      // parking_state_pub_->publish(is_completed_msg);
     } else {
       // Switch to next partial trajectory
       prev_target_index_ = target_index_;
@@ -398,7 +405,7 @@ void ConePlannerNode::onTimer()
 
   // Stop
   if (planned_trajectory_.points.size() <= 1) {
-    if (partial_planned_trajectory_.points.empty()) {
+    if (planned_trajectory_.points.empty()) {
       RCLCPP_INFO(get_logger(), "Stop trajectory from pose");
     }
     const auto stop_trajectory = planned_trajectory_.points.empty()
