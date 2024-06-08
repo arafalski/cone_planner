@@ -20,7 +20,7 @@ colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_E
     - Exposed API (example service/action call. -->
 
 ```bash
-ros2 launch cone_planner cone_planner.launch.py
+ros2 launch cone_planner cone_planner.launch.py vehicle_param_file:=PATH_TO_VEHICLE_PARM_FILE
 ```
 
 ## API
@@ -65,7 +65,3 @@ ros2 launch cone_planner cone_planner.launch.py
 | `rrt_max_planning_time` | float  | Max time of planning |
 | `rrt_margin` | float | Additional car perimeter margin used in planner |
 | `rrt_neighbor_radius` | float | Radius in which checking if shorter path exist through other neighbor is performed |
-
-
-## References / External links
-<!-- Optional -->
