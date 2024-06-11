@@ -218,11 +218,6 @@ bool ConePlanner::make_plan(const Pose& start_pose, const Pose& goal_pose, doubl
     return !detect_collision(IndexXYT{index_x, index_y, index_theta});
   };
 
-  // const rrtstar_core::Pose lo{0, 0, 0};
-  // const rrtstar_core::Pose hi{
-  //   costmap_.info.resolution * costmap_.info.width,
-  //   costmap_.info.resolution * costmap_.info.height,
-  //   M_PI};
   const auto x_start = poseMsgToPose(start_pose_);
   const auto x_goal = poseMsgToPose(goal_pose_);
 
@@ -247,7 +242,7 @@ bool ConePlanner::make_plan(const Pose& start_pose, const Pose& goal_pose, doubl
     return false;
   }
 
-  const bool is_informed = true;
+  constexpr bool is_informed = true;
   const double collision_check_resolution = planner_param_.rrt_margin * 2;
   auto algo = rrtstar_core::RRTStar(
     x_start,

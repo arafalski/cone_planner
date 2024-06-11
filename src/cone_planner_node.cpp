@@ -426,15 +426,15 @@ void ConePlannerNode::onTimer()
 
 PoseStamped ConePlannerNode::get_closest_pose()
 {
-  const auto closest_idx =
-    (motion_utils::findNearestIndex(trajectory_->points, pose_->pose.position) + lookahead_distance_) % trajectory_->points.size();
-  const auto closest_pose = trajectory_->points.at(closest_idx).pose;
+  const auto nearest_idx = motion_utils::findNearestIndex(trajectory_->points, pose_->pose.position);
+  const auto goal_idx = (nearest_idx + lookahead_distance_) % trajectory_->points.size();
+  const auto goal_pose = trajectory_->points.at(goal_idx).pose;
 
-  PoseStamped closest_pose_stamped{};
-  closest_pose_stamped.header = trajectory_->header;
-  closest_pose_stamped.pose = closest_pose;
+  PoseStamped goal_pose_stamped{};
+  goal_pose_stamped.header = trajectory_->header;
+  goal_pose_stamped.pose = goal_pose;
 
-  return closest_pose_stamped;
+  return goal_pose_stamped;
 }
 
 void ConePlannerNode::reset()
