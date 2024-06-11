@@ -240,7 +240,7 @@ ConePlannerNode::ConePlannerNode(const rclcpp::NodeOptions & options)
   th_stopped_time_sec_ = declare_parameter<double>("th_stopped_time_sec");
   th_stopped_velocity_mps_ = declare_parameter<double>("th_stopped_velocity_mps");
   th_course_out_distance_m_ = declare_parameter<double>("th_course_out_distance_m");
-  lookahead_distance_ = declare_parameter<size_t>("lookahead_distance");
+  lookahead_distance_ = declare_parameter<int>("lookahead_distance");
   c_space_margin_ = declare_parameter<double>("c_space_margin_m");
   replan_when_obstacle_found_ = declare_parameter<bool>("replan_when_obstacle_found");
   replan_when_course_out_ = declare_parameter<bool>("replan_when_course_out");
