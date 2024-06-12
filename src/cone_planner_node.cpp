@@ -275,7 +275,7 @@ ConePlannerNode::ConePlannerNode(const rclcpp::NodeOptions & options)
                                   std::bind(&ConePlannerNode::onTimer, this));
   }
 
-  RCLCPP_INFO_ONCE(get_logger(), "Initialized node\n");
+  RCLCPP_DEBUG_ONCE(get_logger(), "Initialized node\n");
 }
 
 void ConePlannerNode::on_odometry(const Odometry::SharedPtr msg) {
@@ -328,7 +328,7 @@ void ConePlannerNode::update_target_index()
     if (new_target_index == target_index_) {
       // Finished publishing all partial trajectories
       is_completed_ = true;
-      RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000, "Freespace planning completed");
+      RCLCPP_DEBUG_THROTTLE(get_logger(), *get_clock(), 1000, "Freespace planning completed");
     } else {
       // Switch to next partial trajectory
       prev_target_index_ = target_index_;
@@ -361,7 +361,7 @@ bool ConePlannerNode::is_plan_required()
                                                            end_index_partial);
     const bool is_obstacle_found = cone_planner_->has_obstacle_on_trajectory(trajectory2PoseArray(forward_trajectory));
     if (is_obstacle_found) {
-      RCLCPP_INFO(get_logger(), "Found obstacle");
+      RCLCPP_DEBUG(get_logger(), "Found obstacle");
       return true;
     }
   }
@@ -369,7 +369,7 @@ bool ConePlannerNode::is_plan_required()
   if (replan_when_course_out_) {
     const bool is_course_out = calc_distance_2d(partial_planned_trajectory_, pose_->pose) > th_course_out_distance_m_;
     if (is_course_out) {
-      RCLCPP_INFO(get_logger(), "Course out");
+      RCLCPP_DEBUG(get_logger(), "Course out");
       return true;
     }
   }
@@ -380,7 +380,7 @@ bool ConePlannerNode::is_plan_required()
 void ConePlannerNode::onTimer()
 {
   if (!trajectory_ || !occupancy_grid_ || !pose_ || !odom_) {
-    RCLCPP_INFO(get_logger(), "Data not ready\n");
+    RCLCPP_DEBUG(get_logger(), "Data not ready\n");
     return;
   }
 
@@ -390,14 +390,14 @@ void ConePlannerNode::onTimer()
 
   if (is_plan_required()) {
     if (partial_planned_trajectory_.points.empty()) {
-      RCLCPP_INFO(get_logger(), "Stop trajectory from pose");
+      RCLCPP_DEBUG(get_logger(), "Stop trajectory from pose");
     }
     const auto stop_trajectory = partial_planned_trajectory_.points.empty()
                                    ? create_stop_trajectory(*pose_)
                                    : create_stop_trajectory(partial_planned_trajectory_);
-    RCLCPP_INFO(get_logger(), "Stop trajectory length: %.2f", calc_trajectory_length(stop_trajectory));
+    RCLCPP_DEBUG(get_logger(), "Stop trajectory length: %.2f", calc_trajectory_length(stop_trajectory));
     planned_trajectory_pub_->publish(stop_trajectory);
-    RCLCPP_INFO(get_logger(), "Started replanning");
+    RCLCPP_DEBUG(get_logger(), "Started replanning");
 
     reset();
     const auto goal_pose = get_closest_pose();
@@ -407,12 +407,12 @@ void ConePlannerNode::onTimer()
   // Stop
   if (planned_trajectory_.points.size() <= 1) {
     if (planned_trajectory_.points.empty()) {
-      RCLCPP_INFO(get_logger(), "Stop trajectory from pose");
+      RCLCPP_DEBUG(get_logger(), "Stop trajectory from pose");
     }
     const auto stop_trajectory = planned_trajectory_.points.empty()
                                    ? create_stop_trajectory(*pose_)
                                    : create_stop_trajectory(planned_trajectory_);
-    RCLCPP_INFO(get_logger(), "Stop trajectory length: %.2f", calc_trajectory_length(stop_trajectory));
+    RCLCPP_DEBUG(get_logger(), "Stop trajectory length: %.2f", calc_trajectory_length(stop_trajectory));
     planned_trajectory_pub_->publish(stop_trajectory);
     return;
   }
@@ -468,10 +468,10 @@ void ConePlannerNode::planTrajectory(const PoseStamped& goal_pose)
                                                c_space_margin_);
   const rclcpp::Time end = get_clock()->now();
 
-  RCLCPP_INFO(get_logger(), "Freespace planning: %f [s]", (end - start).seconds());
+  RCLCPP_DEBUG(get_logger(), "Freespace planning: %f [s]", (end - start).seconds());
 
   if (result) {
-    RCLCPP_INFO(get_logger(), "Found goal!");
+    RCLCPP_DEBUG(get_logger(), "Found goal!");
     planned_trajectory_ = create_trajectory(*pose_,
                                             cone_planner_->get_waypoints(),
                                             waypoints_velocity_);
@@ -481,7 +481,7 @@ void ConePlannerNode::planTrajectory(const PoseStamped& goal_pose)
                                           reversing_indices_,
                                           prev_target_index_);
   } else {
-    RCLCPP_INFO(get_logger(), "Can't find goal...");
+    RCLCPP_DEBUG(get_logger(), "Can't find goal...");
     reset();
   }
 }
